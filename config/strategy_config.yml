@@ -1,0 +1,3 @@
+strategies:
+  first_5_min_candle: 'no'
+  oi_pulse_theory: 'yes'

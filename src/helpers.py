@@ -5,12 +5,27 @@ import datetime as dt
 from datetime import datetime
 import pytz
 import pandas as pd
+import time 
 
 timezone = pytz.timezone('Asia/Kolkata')
 
 def load_config(config_path):
     with open(config_path, 'r') as config_file:
         return yaml.safe_load(config_file)
+    
+def get_order_details(obj, orderid):
+    time.sleep(1)
+    retry_count = 0
+    while retry_count < 5:  # Retry up to 3 times
+        try:
+            for order in obj.orderBook()['data']:
+                if order['orderid'] == orderid:
+                    return order['averageprice'], order['quantity'], order['tradingsymbol'], order['symboltoken']
+        except Exception as e:
+                print(f"Error occurred: {e}")
+                retry_count += 1
+                print(f"Retrying... Attempt at requiredvalue func {retry_count}")
+                time.sleep(3)
 
 def fetch_instrument_list(url):
     response = urllib.request.urlopen(url)
@@ -75,8 +90,17 @@ def symbol_lookup(token, instrument_list, exchange='NFO'):
             return instrument["name"]
 
 def get_ltp(obj, symbol, token, exchange='NFO'):
-    response = obj.ltpData(exchange, symbol, token)
-    return response["data"]["ltp"]
+    retry_count = 0
+    while retry_count < 5:
+        try:
+            response = obj.ltpData(exchange, symbol, token)
+            return response["data"]["ltp"]
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            retry_count += 1
+            print(f"Retrying... Attempt at requiredvalue func {retry_count}")
+            time.sleep(3)
+    return None
 
 def place_market_order(obj, tradingsymbol, symboltoken, transactiontype, quantity, exchange='NFO'):
     orderparams = {

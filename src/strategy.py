@@ -3,6 +3,7 @@ import datetime as dt
 from datetime import datetime
 import pandas as pd
 import helpers
+import indicator
 
 def hist_data_0920(obj, tickers, interval, instrument_list, exchange="NFO"):
     print("getting the 9:20 candle")
@@ -31,7 +32,7 @@ def hist_data_0920(obj, tickers, interval, instrument_list, exchange="NFO"):
     print(high, low)
     return high, low
 
-def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_list, expiry_dates, future_expiry, exchange="NFO"):
+def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_list, expiry_dates, data_0920, future_expiry, exchange="NFO"):
     five_buy_scrpit = []
     for ticker in tickers:
         time.sleep(2)
@@ -39,7 +40,7 @@ def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_
             "exchange": exchange,
             "symboltoken": helpers.token_lookup(ticker, instrument_list),
             "interval": "THREE_MINUTE",
-            "fromdate": dt.date.today().strftime('%Y-%m-%d') + ' 09:15',
+            "fromdate": (dt.date.today() - dt.timedelta(days=4)).strftime('%Y-%m-%d') + ' 02:30',
             "todate": dt.datetime.now(helpers.timezone).strftime('%Y-%m-%d %H:%M')
         }
         retry_count = 0
@@ -51,8 +52,9 @@ def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_
                 df_data.set_index("date", inplace=True)
                 df_data.index = pd.to_datetime(df_data.index)
                 df_data.index = df_data.index.tz_localize(None)
-                print(df_data)
-                if df_data["close"].iloc[-2] > int(round(data_0920[0], -1)):
+                df_data['RSI'] = indicator.calculate_rsi(df_data)
+                print(df_data.tail(5))
+                if df_data["close"].iloc[-2] > int(round(data_0920[0], -1)) and df_data['RSI'].iloc[-2] < 70:
                     future_price = helpers.get_ltp(obj, future_expiry, helpers.option_token(future_expiry, instrument_list))
                     BULL = helpers.get_option_symbol(future_price, expiry_dates, tickers[0], -100, "CE")
                     bull_token = helpers.option_token(BULL, instrument_list, exchange='NFO')
@@ -86,7 +88,7 @@ def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_
                             file.write(message + "\n")
                     else:
                         print("we are already in SELL SIDE")
-                elif df_data["close"].iloc[-2] < int(round(data_0920[1], -1)):
+                elif df_data["close"].iloc[-2] < int(round(data_0920[1], -1)) and df_data['RSI'].iloc[-2] > 30:
                     future_price = helpers.get_ltp(obj, future_expiry, helpers.option_token(future_expiry, instrument_list))
                     time.sleep(2)
                     BEAR = helpers.get_option_symbol(future_price, expiry_dates, tickers[0], 300, "PE")
@@ -110,7 +112,7 @@ def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_
                         }
                         candle_data = obj.getCandleData(option_data)
                         time.sleep(2)
-                        first_sl = candle_data['data'][0][3]
+                        first_sl = (int(candle_data['data'][0][3]) + int(candle_data['data'][0][2])) / 2
                         second_sl = (int(candle_data['data'][0][3]) + int(candle_data['data'][0][2])) / 2
                         First_SL_order_id = helpers.place_stoploss_order(obj, BEAR, bear_token, quantity, first_sl)
                         time.sleep(2)
@@ -129,7 +131,7 @@ def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_
                 print(f"Retrying... Attempt {retry_count}")
                 time.sleep(5)
     if len(five_buy_scrpit) > 0:
-        first_buy_price, first_buy_quantity, tradingsymbol, symboltoken = get_order_details(first_orderid)
+        first_buy_price, first_buy_quantity, tradingsymbol, symboltoken = helpers.get_order_details(obj, first_orderid)
         while True:
             list_of_orders = [First_SL_order_id, Second_SL_order_id, Third_SL_order_id]
             exit_all_loops = False
@@ -167,21 +169,18 @@ def fiftien_min_strategy(obj, tickers, first_buy_quantity, quantity, instrument_
                             if margin == 0.10:
                                 sl, sl3 = sl_values[margin]
                                 helpers.modify_order(obj, First_SL_order_id, first_buy_price * (1 + sl), half_quantity, tradingsymbol, symboltoken)
-                                time.sleep(2)
                                 helpers.modify_order(obj, Third_SL_order_id, first_buy_price * (1 + sl3), half_quantity, tradingsymbol, symboltoken)
+                                helpers.modify_order(obj, Second_SL_order_id, first_buy_price * (1 + sl3), half_quantity, tradingsymbol, symboltoken)
                             elif margin == 0.5:
                                 sl, sl3 = sl_values[margin]
                                 helpers.modify_order(obj, Second_SL_order_id, first_buy_price * (1 + sl), half_quantity, tradingsymbol, symboltoken)
-                                time.sleep(2)
                                 helpers.modify_order(obj, Third_SL_order_id, first_buy_price * (1 + sl3), half_quantity, tradingsymbol, symboltoken)
                             elif margin == 3.3333:
                                 sl = sl_values[margin]
                                 helpers.modify_order(obj, First_SL_order_id, first_buy_price * (1 + sl), half_quantity, tradingsymbol, symboltoken)
-                                time.sleep(2)
                                 helpers.modify_order(obj, Second_SL_order_id, first_buy_price * (1 + sl), half_quantity, tradingsymbol, symboltoken)
                                 order_status = helpers.get_order_status(obj, list_of_orders)
                                 if all(order_status[order] == 'complete' for order in list_of_orders):
-                                    time.sleep(5)
                                     exit_all_loops = True
                                     break
                             else:

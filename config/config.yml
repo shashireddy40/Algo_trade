@@ -1,7 +1,7 @@
 api_keys:
   pwd: '2602'
-  totp_key: KHJPUAED2PK3BLFCI7DNBTA2H4
-  userID: P669300
+  totp_key: xxxxxxx
+  userID: xxxxx
   your_api_key: gtpUuIED
   your_api_session: '35301519'
   your_secret_key: dd799ecc-ded2-49ff-9817-df57056ff232
